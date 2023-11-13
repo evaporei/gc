@@ -56,11 +56,16 @@ pub struct Pair {
 }
 
 const STACK_MAX: usize = 256;
+const INITIAL_GC_THRESHOLD: usize = 8;
 
 pub struct Vm {
     stack: [Option<GcPtr<Object>>; STACK_MAX],
     stack_size: usize,
     heap: Vec<GcPtr<Object>>,
+    /// currently total number of objects allocated
+    num_objs: usize,
+    /// number of objects required to trigger a GC
+    max_objs: usize,
 }
 
 impl Vm {
@@ -69,6 +74,8 @@ impl Vm {
             stack: std::array::from_fn(|_| None),
             stack_size: 0,
             heap: vec![],
+            num_objs: 0,
+            max_objs: INITIAL_GC_THRESHOLD,
         }
     }
 
@@ -83,6 +90,7 @@ impl Vm {
         std::mem::forget(box_obj);
         self.heap.push(gc_ptr);
         self.stack_size += 1;
+        self.num_objs += 1;
     }
 
     pub fn pop(&mut self) -> GcPtr<Object> {
@@ -117,6 +125,7 @@ impl Vm {
         for obj in &mut self.heap {
             if !obj.is_marked() {
                 unsafe { obj.free() }
+                self.num_objs -= 1;
             } else {
                 obj.unmark();
                 live_objects.push(obj.clone()); // ptr clone
@@ -129,5 +138,11 @@ impl Vm {
     pub fn gc(&mut self) {
         self.mark_all();
         self.sweep();
+
+        self.max_objs = if self.num_objs == 0 {
+            INITIAL_GC_THRESHOLD
+        } else {
+            self.num_objs * 2
+        };
     }
 }
