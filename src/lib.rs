@@ -1,5 +1,6 @@
 use std::ptr::NonNull;
 
+#[derive(Clone)]
 pub struct GcPtr<T>(NonNull<T>);
 
 impl GcPtr<Object> {
@@ -19,18 +20,25 @@ impl GcPtr<Object> {
             }
         }
     }
+
+    fn is_marked(&self) -> bool {
+        unsafe { self.0.as_ref().marked }
+    }
 }
 
+#[derive(Clone)]
 pub struct Object {
     marked: bool,
     value: ObjType,
 }
 
+#[derive(Clone)]
 pub enum ObjType {
     Int(i64),
     Pair(Pair),
 }
 
+#[derive(Clone)]
 pub struct Pair {
     head: Option<GcPtr<Object>>,
     tail: Option<GcPtr<Object>>,
@@ -41,6 +49,7 @@ const STACK_MAX: usize = 256;
 pub struct Vm {
     stack: [Option<GcPtr<Object>>; STACK_MAX],
     stack_size: usize,
+    heap: Vec<GcPtr<Object>>,
 }
 
 impl Vm {
@@ -48,6 +57,7 @@ impl Vm {
         Self {
             stack: std::array::from_fn(|_| None),
             stack_size: 0,
+            heap: vec![],
         }
     }
 
@@ -57,8 +67,10 @@ impl Vm {
             marked: false,
             value,
         });
-        self.stack[self.stack_size] = Some(GcPtr(NonNull::new(&mut *box_obj).unwrap()));
+        let gc_ptr = GcPtr(NonNull::new(&mut *box_obj).unwrap());
+        self.stack[self.stack_size] = Some(gc_ptr.clone());
         std::mem::forget(box_obj);
+        self.heap.push(gc_ptr);
         self.stack_size += 1;
     }
 
@@ -86,5 +98,30 @@ impl Vm {
                 }
             }
         }
+    }
+
+    pub fn sweep(&mut self) {
+        let mut live_objects = vec![];
+
+        for obj in &mut self.heap {
+            if !obj.is_marked() {
+                unsafe {
+                    let unreached = obj.0.as_mut();
+                    let _ = Box::from_raw(unreached); // drop
+                }
+            } else {
+                unsafe {
+                    obj.0.as_mut().marked = false;
+                }
+                live_objects.push(obj.clone()); // ptr clone
+            }
+        }
+
+        self.heap = live_objects;
+    }
+
+    pub fn gc(&mut self) {
+        self.mark_all();
+        self.sweep();
     }
 }
