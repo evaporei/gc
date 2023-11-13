@@ -2,6 +2,25 @@ use std::ptr::NonNull;
 
 pub struct GcPtr<T>(NonNull<T>);
 
+impl GcPtr<Object> {
+    unsafe fn mark(&mut self) {
+        if self.0.as_ref().marked {
+            return;
+        }
+
+        self.0.as_mut().marked = true;
+
+        if let ObjType::Pair(pair) = &mut self.0.as_mut().value {
+            if let Some(ref mut head) = &mut pair.head {
+                head.mark();
+            }
+            if let Some(ref mut tail) = &mut pair.tail {
+                tail.mark();
+            }
+        }
+    }
+}
+
 pub struct Object {
     marked: bool,
     value: ObjType,
@@ -57,5 +76,15 @@ impl Vm {
         let head = Some(self.pop());
         let tail = Some(self.pop());
         self.push(ObjType::Pair(Pair { head, tail }));
+    }
+
+    pub fn mark_all(&mut self) {
+        for obj in &mut self.stack {
+            if let Some(obj) = obj {
+                unsafe {
+                    obj.mark();
+                }
+            }
+        }
     }
 }
