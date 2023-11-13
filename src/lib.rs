@@ -1,6 +1,6 @@
 use std::ptr::NonNull;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct GcPtr<T>(NonNull<T>);
 
 impl GcPtr<Object> {
@@ -37,19 +37,19 @@ impl GcPtr<Object> {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Object {
     marked: bool,
     value: ObjType,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum ObjType {
     Int(i64),
     Pair(Pair),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Pair {
     head: Option<GcPtr<Object>>,
     tail: Option<GcPtr<Object>>,
@@ -94,8 +94,8 @@ impl Vm {
     }
 
     pub fn pop(&mut self) -> GcPtr<Object> {
-        let obj = self.stack[self.stack_size].take().unwrap();
         self.stack_size -= 1;
+        let obj = self.stack[self.stack_size].take().unwrap();
         obj
     }
 
@@ -168,5 +168,19 @@ fn test1() {
 
     vm.gc();
     assert!(vm.num_objs == 2, "Should have preserved objects.");
+    drop(vm);
+}
+
+#[test]
+fn test2() {
+    println!("Test 2: Unreached objects are collected.");
+    let mut vm = Vm::new();
+    vm.push_int(1);
+    vm.push_int(2);
+    vm.pop();
+    vm.pop();
+
+    vm.gc();
+    assert!(vm.num_objs == 0, "Should have collected objects.");
     drop(vm);
 }
