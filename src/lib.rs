@@ -24,6 +24,17 @@ impl GcPtr<Object> {
     fn is_marked(&self) -> bool {
         unsafe { self.0.as_ref().marked }
     }
+
+    fn unmark(&mut self) {
+        unsafe {
+            self.0.as_mut().marked = false;
+        }
+    }
+
+    unsafe fn free(&mut self) {
+        let unreached = self.0.as_mut();
+        let _ = Box::from_raw(unreached); // drop
+    }
 }
 
 #[derive(Clone)]
@@ -105,14 +116,9 @@ impl Vm {
 
         for obj in &mut self.heap {
             if !obj.is_marked() {
-                unsafe {
-                    let unreached = obj.0.as_mut();
-                    let _ = Box::from_raw(unreached); // drop
-                }
+                unsafe { obj.free() }
             } else {
-                unsafe {
-                    obj.0.as_mut().marked = false;
-                }
+                obj.unmark();
                 live_objects.push(obj.clone()); // ptr clone
             }
         }
