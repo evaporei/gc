@@ -136,6 +136,8 @@ impl Vm {
     }
 
     pub fn gc(&mut self) {
+        let num_objs = self.num_objs;
+
         self.mark_all();
         self.sweep();
 
@@ -144,5 +146,27 @@ impl Vm {
         } else {
             self.num_objs * 2
         };
+
+        println!("Collected {} objects, {} remaining.", num_objs - self.num_objs, self.num_objs);
     }
+}
+
+impl Drop for Vm {
+    fn drop(&mut self) {
+        self.stack_size = 0;
+        self.stack = std::array::from_fn(|_| None);
+        self.gc();
+    }
+}
+
+#[test]
+fn test1() {
+    println!("Test 1: Objects on stack are preserved.");
+    let mut vm = Vm::new();
+    vm.push_int(1);
+    vm.push_int(2);
+
+    vm.gc();
+    assert!(vm.num_objs == 2, "Should have preserved objects.");
+    drop(vm);
 }
