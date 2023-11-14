@@ -184,3 +184,79 @@ fn test2() {
     assert!(vm.num_objs == 0, "Should have collected objects.");
     drop(vm);
 }
+
+#[test]
+fn test3() {
+  println!("Test 3: Reach nested objects.");
+  let mut vm = Vm::new();
+  vm.push_int(1);
+  vm.push_int(2);
+  vm.push_pair();
+  vm.push_int(3);
+  vm.push_int(4);
+  vm.push_pair();
+  vm.push_pair();
+
+  vm.gc();
+  assert!(vm.num_objs == 7, "Should have reached objects.");
+  drop(vm);
+}
+
+#[test]
+#[ignore]
+fn test4() {
+    println!("Test 4: Handle cycles.");
+    let mut vm = Vm::new();
+    vm.push_int(1);
+    vm.push_int(2);
+    vm.push_pair();
+    vm.push_int(3);
+    vm.push_int(4);
+    vm.push_pair();
+
+    /* Set up a cycle, and also make 2 and 4 unreachable and collectible. */
+    unsafe {
+        let b = vm.heap[1].clone();
+        let pair_a = &mut vm.heap[0];
+        if let ObjType::Pair(ref mut p) = &mut pair_a.0.as_mut().value {
+            p.tail = Some(b);
+        }
+    }
+    unsafe {
+        let a = vm.heap[0].clone();
+        let pair_b = &mut vm.heap[1];
+        if let ObjType::Pair(ref mut p) = &mut pair_b.0.as_mut().value {
+            p.tail = Some(a);
+        }
+    }
+
+    vm.gc();
+    assert!(dbg!(vm.num_objs) == 4, "Should have collected objects.");
+    drop(vm);
+}
+
+#[test]
+fn perf_test() {
+    println!("Performance Test.");
+    let mut vm = Vm::new();
+
+    for i in 0..1000 {
+        for _j in 0..20 {
+            vm.push_int(i);
+        }
+
+        for _k in 0..20 {
+            vm.pop();
+        }
+    }
+    drop(vm);
+}
+
+#[test]
+fn full() {
+    test1();
+    test2();
+    test3();
+    // test4();
+    perf_test();
+}
